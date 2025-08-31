@@ -367,22 +367,6 @@ class AimbotApp:
             state="readonly",
         ).grid(row=row, column=1, sticky="w", padx=8)
 
-        row += 1
-        ttk.Label(frame, text="Smooth speed").grid(row=row, column=0, sticky="w")
-        self.smooth_var = tk.DoubleVar(value=self.settings.smooth_speed)
-        self.smooth_value_label = ttk.Label(frame, text=f"{self.smooth_var.get():.1f}")
-        self.smooth_value_label.grid(row=row, column=2, sticky="e")
-        sm_scale = ttk.Scale(
-            frame,
-            variable=self.smooth_var,
-            from_=1.0,
-            to=20.0,
-            orient=tk.HORIZONTAL,
-            length=220,
-            command=lambda _evt=None: self._on_smooth_change(),
-        )
-        sm_scale.grid(row=row, column=1, sticky="ew", padx=8)
-
         # Hero settings
         row += 1
         hero_frame = ttk.LabelFrame(parent, text="Hero Ability Locks")
@@ -536,14 +520,6 @@ class AimbotApp:
         self.headshot_percent.config(text=f"{int(val * 100)}%")
         self._update_headshot_warning()
 
-    def _on_smooth_change(self) -> None:
-        """Update the smooth speed display label."""
-        try:
-            val = float(self.smooth_var.get())
-        except tk.TclError:
-            val = 0.0
-        self.smooth_value_label.config(text=f"{val:.1f}")
-
     def _apply_widget_values(self) -> None:
         """Update :attr:`settings` from widget values."""
         # Clamp values to expected ranges
@@ -554,10 +530,6 @@ class AimbotApp:
         except Exception:
             self.settings.headshot_probability = 0.25
         self.settings.target_select_type = self.target_var.get()
-        try:
-            self.settings.smooth_speed = max(0.1, float(self.smooth_var.get()))
-        except Exception:
-            self.settings.smooth_speed = 5.0
         self.settings.headshot_on_acquire = self.acquire_headshot_var.get()
 
         self.settings.grey_talon_lock_enabled = self.grey_enabled.get()
