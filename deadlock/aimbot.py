@@ -86,6 +86,59 @@ _REVERSE_KEY_ALIASES: Dict[int, str] = {
 """Reverse mapping to describe virtual keys in human readable form."""
 
 
+def list_virtual_key_aliases() -> list[str]:
+    """Return the available human readable virtual-key aliases."""
+
+    return sorted(_KEY_ALIASES)
+
+
+def describe_virtual_key(code: int | None) -> str:
+    """Return a readable description for a Windows virtual-key code."""
+
+    if code is None:
+        return ""
+    alias = _REVERSE_KEY_ALIASES.get(code)
+    if alias is not None:
+        return alias
+    if 32 <= code <= 126:
+        return chr(code)
+    return f"0x{code:02X}"
+
+
+def parse_virtual_key(value: str | int | None) -> int | None:
+    """Return the virtual-key code represented by ``value``.
+
+    ``value`` may be ``None`` or an empty string to disable the binding.
+    Named aliases from :func:`list_virtual_key_aliases` are supported as
+    well as single character strings and integer specifications (decimal
+    or hexadecimal).
+    """
+
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    text = value.strip()
+    if not text:
+        return None
+    lowered = text.lower()
+    alias = _KEY_ALIASES.get(lowered)
+    if alias is not None:
+        return alias
+    if len(text) == 1:
+        return ord(text.upper())
+    try:
+        return int(text, 0)
+    except ValueError as exc:
+        raise ValueError(f"Unknown key specification: {value!r}") from exc
+
+
+def available_auto_fire_buttons() -> tuple[str, ...]:
+    """Return the supported auto-fire mouse buttons."""
+
+    return tuple(sorted(_MOUSE_BUTTON_FLAGS))
+
+
 def _normalise_hero_key(value: str) -> str:
     """Return a normalised key for hero lookup."""
 
@@ -135,6 +188,54 @@ def _parse_hero_identifier(value: Any) -> HeroIds:
                 raise ValueError(f"unknown hero id {value}") from exc
 
     raise ValueError(f"unknown hero identifier {value!r}")
+
+
+def parse_hero_identifier(value: Any) -> HeroIds:
+    """Public wrapper returning the hero represented by ``value``."""
+
+    return _parse_hero_identifier(value)
+
+
+def _prettify_hero_name(hero: HeroIds) -> str:
+    """Return a nicely spaced hero name for display purposes."""
+
+    result: list[str] = []
+    name = hero.name
+    for idx, char in enumerate(name):
+        if idx and char.isupper() and not name[idx - 1].isupper():
+            result.append(" ")
+        result.append(char)
+    return "".join(result)
+
+
+def format_hero_list(values: Sequence[HeroIds]) -> str:
+    """Return ``values`` formatted as a comma separated string."""
+
+    return ", ".join(_prettify_hero_name(hero) for hero in values)
+
+
+def parse_hero_list(value: str | Sequence[Any] | None) -> tuple[HeroIds, ...]:
+    """Return a tuple of heroes represented by ``value``.
+
+    ``value`` may be an iterable of hero identifiers or a comma separated
+    string. Blank entries are ignored and duplicates are removed while
+    preserving order.
+    """
+
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        items: Iterable[Any] = [item.strip() for item in value.split(",")]
+    else:
+        items = value
+    result: list[HeroIds] = []
+    for item in items:
+        if not item:
+            continue
+        hero = _parse_hero_identifier(item)
+        if hero not in result:
+            result.append(hero)
+    return tuple(result)
 
 
 @dataclass
