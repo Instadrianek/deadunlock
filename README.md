@@ -55,6 +55,19 @@ pip install -r requirements.txt
 Both the aimbot and ESP will check for updates on startup and will
 automatically run ``git pull`` if your local copy is out of date.
 
+If you frequently hit GitHub's anonymous rate limits while running the bundled
+binary, set the ``DEADUNLOCK_GITHUB_TOKEN`` (or ``GITHUB_TOKEN``) environment
+variable to a personal access token. The update checker will include it in API
+requests to avoid spurious failures.
+
+When running from a downloaded archive without the ``.git`` directory, the
+update checker falls back to the packaged ``version.txt`` so release builds
+still detect newer commits.
+
+Set the ``DEADUNLOCK_SKIP_UPDATE_CHECK`` (or ``DEADUNLOCK_DISABLE_UPDATE_CHECK``)
+environment variable to disable network update checks entirely—handy when you
+know you're offline or want to defer updates temporarily.
+
 ### Aimbot
 
 Launch Deadlock first and then start the aimbot with:
@@ -77,6 +90,31 @@ The aimbot automatically selects the closest target when you hold down the left
 mouse button. If you want to shoot without the aimbot—for example at troopers,
 towers or souls—hold the right mouse button instead and make sure to remap the
 alternate fire key in Deadlock's settings so it doesn't conflict.
+
+#### Aim smoothing
+
+Use the `smoothing_mode` setting to decide how aggressively the camera tracks
+targets. The default `constant` mode always moves at `smooth_speed`. Switching
+to `distance` blends between `min_smooth_speed` and `smooth_speed` based on the
+enemy's distance. The new `fov` option performs the same blending but uses the
+combined aim angle to react faster when a target is far off-centre and slow
+down when only micro adjustments are needed. Tune the blend range with
+`fov_smoothing_min` and `fov_smoothing_max`, or from the command line via
+`--fov-smoothing-min` and `--fov-smoothing-max`.
+
+Newly acquired targets can optionally ease into their full turn speed using
+`lock_ramp_duration` and `lock_ramp_start_speed`. The former controls how long
+the ramp lasts, while the latter sets the starting speed before blending up to
+the active smoothing value. Configure them through the GUI or CLI switches
+`--lock-ramp-duration` and `--lock-ramp-start-speed` to soften the initial snap
+when locking onto fresh targets.
+
+If you prefer different responsiveness on each axis, tune
+`yaw_smooth_scale` and `pitch_smooth_scale`. Values above `1.0` let yaw or
+pitch accelerate beyond the blended smoothing speed, while numbers below `1.0`
+slow the respective axis for finer micro-corrections. These multipliers are
+available in the GUI and via `--yaw-smooth-scale` / `--pitch-smooth-scale` on
+the command line.
 
 #### Headshot targeting
 

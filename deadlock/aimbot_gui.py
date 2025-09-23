@@ -125,12 +125,30 @@ class AimbotApp:
         self.target_var = tk.StringVar(value=self.settings.target_select_type)
         self.smooth_speed_var = tk.DoubleVar(value=self.settings.smooth_speed)
         self.min_smooth_speed_var = tk.DoubleVar(value=self.settings.min_smooth_speed)
+        self.yaw_smooth_scale_var = tk.DoubleVar(
+            value=self.settings.yaw_smooth_scale
+        )
+        self.pitch_smooth_scale_var = tk.DoubleVar(
+            value=self.settings.pitch_smooth_scale
+        )
         self.smoothing_mode_var = tk.StringVar(value=self.settings.smoothing_mode)
         self.distance_smoothing_min_var = tk.DoubleVar(
             value=self.settings.distance_smoothing_min
         )
         self.distance_smoothing_max_var = tk.DoubleVar(
             value=self.settings.distance_smoothing_max
+        )
+        self.fov_smoothing_min_var = tk.DoubleVar(
+            value=self.settings.fov_smoothing_min
+        )
+        self.fov_smoothing_max_var = tk.DoubleVar(
+            value=self.settings.fov_smoothing_max
+        )
+        self.lock_ramp_duration_var = tk.DoubleVar(
+            value=self.settings.lock_ramp_duration
+        )
+        self.lock_ramp_start_speed_var = tk.DoubleVar(
+            value=self.settings.lock_ramp_start_speed
         )
         self.target_switch_cooldown_var = tk.DoubleVar(
             value=self.settings.target_switch_cooldown
@@ -248,9 +266,15 @@ class AimbotApp:
         self.target_var.set(self.settings.target_select_type)
         self.smooth_speed_var.set(self.settings.smooth_speed)
         self.min_smooth_speed_var.set(self.settings.min_smooth_speed)
+        self.yaw_smooth_scale_var.set(self.settings.yaw_smooth_scale)
+        self.pitch_smooth_scale_var.set(self.settings.pitch_smooth_scale)
         self.smoothing_mode_var.set(self.settings.smoothing_mode)
         self.distance_smoothing_min_var.set(self.settings.distance_smoothing_min)
         self.distance_smoothing_max_var.set(self.settings.distance_smoothing_max)
+        self.fov_smoothing_min_var.set(self.settings.fov_smoothing_min)
+        self.fov_smoothing_max_var.set(self.settings.fov_smoothing_max)
+        self.lock_ramp_duration_var.set(self.settings.lock_ramp_duration)
+        self.lock_ramp_start_speed_var.set(self.settings.lock_ramp_start_speed)
         self.target_switch_cooldown_var.set(self.settings.target_switch_cooldown)
         self.target_switch_leeway_var.set(self.settings.target_switch_leeway)
         self.activation_mode_var.set(self.settings.activation_mode)
@@ -857,7 +881,7 @@ class AimbotApp:
         ttk.Combobox(
             aim_frame,
             textvariable=self.smoothing_mode_var,
-            values=["constant", "distance"],
+            values=["constant", "distance", "fov"],
             state="readonly",
             width=12,
         ).grid(row=aim_row, column=1, sticky="w", padx=8)
@@ -887,6 +911,32 @@ class AimbotApp:
         ).grid(row=aim_row, column=1, sticky="w", padx=8)
 
         aim_row += 1
+        ttk.Label(aim_frame, text="Yaw speed multiplier").grid(
+            row=aim_row, column=0, sticky="w"
+        )
+        ttk.Spinbox(
+            aim_frame,
+            textvariable=self.yaw_smooth_scale_var,
+            from_=0.0,
+            to=4.0,
+            increment=0.05,
+            width=8,
+        ).grid(row=aim_row, column=1, sticky="w", padx=8)
+
+        aim_row += 1
+        ttk.Label(aim_frame, text="Pitch speed multiplier").grid(
+            row=aim_row, column=0, sticky="w"
+        )
+        ttk.Spinbox(
+            aim_frame,
+            textvariable=self.pitch_smooth_scale_var,
+            from_=0.0,
+            to=4.0,
+            increment=0.05,
+            width=8,
+        ).grid(row=aim_row, column=1, sticky="w", padx=8)
+
+        aim_row += 1
         ttk.Label(aim_frame, text="Distance smoothing start (m)").grid(
             row=aim_row, column=0, sticky="w"
         )
@@ -908,6 +958,58 @@ class AimbotApp:
             textvariable=self.distance_smoothing_max_var,
             from_=0.0,
             to=150.0,
+            increment=0.5,
+            width=8,
+        ).grid(row=aim_row, column=1, sticky="w", padx=8)
+
+        aim_row += 1
+        ttk.Label(aim_frame, text="FOV smoothing start (deg)").grid(
+            row=aim_row, column=0, sticky="w"
+        )
+        ttk.Spinbox(
+            aim_frame,
+            textvariable=self.fov_smoothing_min_var,
+            from_=0.0,
+            to=30.0,
+            increment=0.5,
+            width=8,
+        ).grid(row=aim_row, column=1, sticky="w", padx=8)
+
+        aim_row += 1
+        ttk.Label(aim_frame, text="FOV smoothing end (deg)").grid(
+            row=aim_row, column=0, sticky="w"
+        )
+        ttk.Spinbox(
+            aim_frame,
+            textvariable=self.fov_smoothing_max_var,
+            from_=0.0,
+            to=60.0,
+            increment=0.5,
+            width=8,
+        ).grid(row=aim_row, column=1, sticky="w", padx=8)
+
+        aim_row += 1
+        ttk.Label(aim_frame, text="Lock ramp duration (s)").grid(
+            row=aim_row, column=0, sticky="w"
+        )
+        ttk.Spinbox(
+            aim_frame,
+            textvariable=self.lock_ramp_duration_var,
+            from_=0.0,
+            to=2.0,
+            increment=0.05,
+            width=8,
+        ).grid(row=aim_row, column=1, sticky="w", padx=8)
+
+        aim_row += 1
+        ttk.Label(aim_frame, text="Lock ramp start speed").grid(
+            row=aim_row, column=0, sticky="w"
+        )
+        ttk.Spinbox(
+            aim_frame,
+            textvariable=self.lock_ramp_start_speed_var,
+            from_=0.0,
+            to=50.0,
             increment=0.5,
             width=8,
         ).grid(row=aim_row, column=1, sticky="w", padx=8)
@@ -1421,6 +1523,16 @@ class AimbotApp:
                 "Minimum smooth speed",
                 minimum=0.0,
             )
+            self.settings.yaw_smooth_scale = self._read_float(
+                self.yaw_smooth_scale_var.get(),
+                "Yaw speed multiplier",
+                minimum=0.0,
+            )
+            self.settings.pitch_smooth_scale = self._read_float(
+                self.pitch_smooth_scale_var.get(),
+                "Pitch speed multiplier",
+                minimum=0.0,
+            )
             self.settings.distance_smoothing_min = self._read_float(
                 self.distance_smoothing_min_var.get(),
                 "Distance smoothing start",
@@ -1429,6 +1541,26 @@ class AimbotApp:
             self.settings.distance_smoothing_max = self._read_float(
                 self.distance_smoothing_max_var.get(),
                 "Distance smoothing end",
+                minimum=0.0,
+            )
+            self.settings.fov_smoothing_min = self._read_float(
+                self.fov_smoothing_min_var.get(),
+                "FOV smoothing start",
+                minimum=0.0,
+            )
+            self.settings.fov_smoothing_max = self._read_float(
+                self.fov_smoothing_max_var.get(),
+                "FOV smoothing end",
+                minimum=0.0,
+            )
+            self.settings.lock_ramp_duration = self._read_float(
+                self.lock_ramp_duration_var.get(),
+                "Lock ramp duration",
+                minimum=0.0,
+            )
+            self.settings.lock_ramp_start_speed = self._read_float(
+                self.lock_ramp_start_speed_var.get(),
+                "Lock ramp start speed",
                 minimum=0.0,
             )
             self.settings.target_select_type = self.target_var.get()
