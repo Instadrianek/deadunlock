@@ -25,8 +25,32 @@ def calculate_new_camera_angles(
     desired_yaw: float,
     desired_pitch: float,
     max_change: float,
+    *,
+    max_yaw_change: float | None = None,
+    max_pitch_change: float | None = None,
 ) -> Tuple[float, float]:
-    """Return new yaw and pitch gradually moving towards desired angles."""
+    """Return new yaw and pitch gradually moving towards desired angles.
+
+    Parameters
+    ----------
+    current_yaw, current_pitch:
+        The player's current camera angles in degrees.
+    desired_yaw, desired_pitch:
+        The target angles the camera should rotate towards.
+    max_change:
+        Fallback limit for how many degrees the camera may rotate during this
+        update.  When ``max_yaw_change`` or ``max_pitch_change`` are provided
+        they override this value for the respective axis.
+    max_yaw_change, max_pitch_change:
+        Optional per-axis limits that clamp yaw and pitch adjustments
+        independently.  ``None`` falls back to ``max_change``.
+    """
+
+    yaw_limit = max_change if max_yaw_change is None else max_yaw_change
+    pitch_limit = max_change if max_pitch_change is None else max_pitch_change
+    yaw_limit = max(0.0, yaw_limit)
+    pitch_limit = max(0.0, pitch_limit)
+
     diff_yaw = min(
         desired_yaw - current_yaw,
         desired_yaw - current_yaw + 360,
@@ -39,8 +63,8 @@ def calculate_new_camera_angles(
         desired_pitch - current_pitch - 360,
         key=abs,
     )
-    diff_yaw = max(-max_change, min(max_change, diff_yaw))
-    diff_pitch = max(-max_change, min(max_change, diff_pitch))
+    diff_yaw = max(-yaw_limit, min(yaw_limit, diff_yaw))
+    diff_pitch = max(-pitch_limit, min(pitch_limit, diff_pitch))
     return current_yaw + diff_yaw, current_pitch + diff_pitch
 
 

@@ -255,13 +255,31 @@ class AimbotSettings:
     #: minimum smoothing speed when adaptive smoothing is active
 
     smoothing_mode: str = "constant"
-    #: how smoothing speed is resolved: ``"constant"`` or ``"distance"``
+    #: how smoothing speed is resolved: ``"constant"``, ``"distance"`` or ``"fov"``
+
+    yaw_smooth_scale: float = 1.0
+    #: multiplier applied to smoothing speed for yaw adjustments
+
+    pitch_smooth_scale: float = 1.0
+    #: multiplier applied to smoothing speed for pitch adjustments
 
     distance_smoothing_min: float = 5.0
     #: distance (metres) where ``min_smooth_speed`` takes effect
 
     distance_smoothing_max: float = 35.0
     #: distance (metres) where ``smooth_speed`` takes effect
+
+    fov_smoothing_min: float = 2.0
+    #: combined FOV angle (degrees) where ``min_smooth_speed`` takes effect
+
+    fov_smoothing_max: float = 12.0
+    #: combined FOV angle (degrees) where ``smooth_speed`` takes effect
+
+    lock_ramp_duration: float = 0.25
+    #: seconds for smoothing speed to reach full strength after acquiring a target
+
+    lock_ramp_start_speed: float = 1.5
+    #: smoothing speed used immediately after acquiring a new target
 
     target_switch_cooldown: float = 0.2
     #: seconds to stay on a target before switching to a marginally better one
@@ -409,8 +427,10 @@ class AimbotSettings:
         if self.activation_mode not in {"hold", "toggle"}:
             raise ValueError("activation_mode must be 'hold' or 'toggle'")
 
-        if self.smoothing_mode not in {"constant", "distance"}:
-            raise ValueError("smoothing_mode must be 'constant' or 'distance'")
+        if self.smoothing_mode not in {"constant", "distance", "fov"}:
+            raise ValueError(
+                "smoothing_mode must be 'constant', 'distance' or 'fov'"
+            )
 
         if self.min_smooth_speed < 0:
             self.min_smooth_speed = 0.0
@@ -418,11 +438,31 @@ class AimbotSettings:
         if self.min_smooth_speed > self.smooth_speed:
             self.min_smooth_speed = self.smooth_speed
 
+        if self.yaw_smooth_scale < 0:
+            self.yaw_smooth_scale = 0.0
+
+        if self.pitch_smooth_scale < 0:
+            self.pitch_smooth_scale = 0.0
+
         if self.distance_smoothing_min < 0:
             self.distance_smoothing_min = 0.0
 
         if self.distance_smoothing_max <= self.distance_smoothing_min:
             self.distance_smoothing_max = self.distance_smoothing_min + 0.01
+
+        if self.fov_smoothing_min < 0:
+            self.fov_smoothing_min = 0.0
+
+        if self.fov_smoothing_max <= self.fov_smoothing_min:
+            self.fov_smoothing_max = self.fov_smoothing_min + 0.01
+
+        if self.lock_ramp_duration < 0:
+            self.lock_ramp_duration = 0.0
+
+        if self.lock_ramp_start_speed < 0:
+            self.lock_ramp_start_speed = 0.0
+        if self.lock_ramp_start_speed > self.smooth_speed:
+            self.lock_ramp_start_speed = self.smooth_speed
 
         if self.target_switch_cooldown < 0:
             self.target_switch_cooldown = 0.0
@@ -890,21 +930,60 @@ class Aimbot:
     def _compute_smooth_speed(self, metrics: Optional[_TargetMetrics]) -> float:
         """Return the smoothing speed to apply for ``metrics``."""
 
-        if metrics is None or self.settings.smoothing_mode == "constant":
-            return self.settings.smooth_speed
+        mode = self.settings.smoothing_mode
+        if metrics is None or mode == "constant":
+            return self._apply_lock_ramp(self.settings.smooth_speed)
 
-        distance = metrics.distance
-        min_distance = self.settings.distance_smoothing_min
-        max_distance = self.settings.distance_smoothing_max
-        if max_distance <= min_distance:
-            return self.settings.smooth_speed
+        if mode == "distance":
+            distance = metrics.distance
+            min_distance = self.settings.distance_smoothing_min
+            max_distance = self.settings.distance_smoothing_max
+            if max_distance <= min_distance:
+                return self._apply_lock_ramp(self.settings.smooth_speed)
 
-        clamped = min(max(distance, min_distance), max_distance)
-        ratio = (clamped - min_distance) / (max_distance - min_distance)
-        return (
+            clamped = min(max(distance, min_distance), max_distance)
+            ratio = (clamped - min_distance) / (max_distance - min_distance)
+        elif mode == "fov":
+            angle = metrics.combined_fov
+            min_angle = self.settings.fov_smoothing_min
+            max_angle = self.settings.fov_smoothing_max
+            if max_angle <= min_angle:
+                return self._apply_lock_ramp(self.settings.smooth_speed)
+
+            clamped = min(max(angle, min_angle), max_angle)
+            ratio = (clamped - min_angle) / (max_angle - min_angle)
+        else:
+            return self._apply_lock_ramp(self.settings.smooth_speed)
+
+        blended = (
             self.settings.min_smooth_speed
             + (self.settings.smooth_speed - self.settings.min_smooth_speed) * ratio
         )
+        return self._apply_lock_ramp(blended)
+
+    def _apply_lock_ramp(self, base_speed: float) -> float:
+        """Return ``base_speed`` adjusted by the current lock ramp settings."""
+
+        if (
+            base_speed <= 0
+            or self.settings.lock_ramp_duration <= 0
+            or self._lock_acquired_at == 0.0
+            or self.locked_on is None
+        ):
+            return base_speed
+
+        start_speed = max(
+            0.0, min(self.settings.lock_ramp_start_speed, base_speed)
+        )
+        if start_speed >= base_speed:
+            return base_speed
+
+        elapsed = max(0.0, time.monotonic() - self._lock_acquired_at)
+        if elapsed >= self.settings.lock_ramp_duration:
+            return base_speed
+
+        ratio = elapsed / self.settings.lock_ramp_duration
+        return start_speed + (base_speed - start_speed) * ratio
 
     def pause(self) -> None:
         """Pause the aimbot."""
@@ -1154,12 +1233,16 @@ class Aimbot:
                     continue
                 yaw += jitter_yaw
                 pitch += jitter_pitch
+                yaw_limit = smooth_speed * self.settings.yaw_smooth_scale
+                pitch_limit = smooth_speed * self.settings.pitch_smooth_scale
                 new_yaw, new_pitch = calculate_new_camera_angles(
                     current_yaw,
                     current_pitch,
                     yaw,
                     -pitch,
                     smooth_speed,
+                    max_yaw_change=yaw_limit,
+                    max_pitch_change=pitch_limit,
                 )
                 self.mem.set_angles(new_yaw, new_pitch, my_aim_angle)
                 time.sleep(0.001)
@@ -1232,10 +1315,22 @@ def build_settings_from_args(args: argparse.Namespace) -> AimbotSettings:
         settings_data["min_smooth_speed"] = args.min_smooth_speed
     if args.smoothing_mode:
         settings_data["smoothing_mode"] = args.smoothing_mode
+    if args.yaw_smooth_scale is not None:
+        settings_data["yaw_smooth_scale"] = args.yaw_smooth_scale
+    if args.pitch_smooth_scale is not None:
+        settings_data["pitch_smooth_scale"] = args.pitch_smooth_scale
     if args.distance_smoothing_min is not None:
         settings_data["distance_smoothing_min"] = args.distance_smoothing_min
     if args.distance_smoothing_max is not None:
         settings_data["distance_smoothing_max"] = args.distance_smoothing_max
+    if args.fov_smoothing_min is not None:
+        settings_data["fov_smoothing_min"] = args.fov_smoothing_min
+    if args.fov_smoothing_max is not None:
+        settings_data["fov_smoothing_max"] = args.fov_smoothing_max
+    if args.lock_ramp_duration is not None:
+        settings_data["lock_ramp_duration"] = args.lock_ramp_duration
+    if args.lock_ramp_start_speed is not None:
+        settings_data["lock_ramp_start_speed"] = args.lock_ramp_start_speed
     if args.activation_mode:
         settings_data["activation_mode"] = args.activation_mode
     if args.disable_headshot_on_acquire:
@@ -1398,8 +1493,18 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument(
         "--smoothing-mode",
-        choices=["constant", "distance"],
+        choices=["constant", "distance", "fov"],
         help="strategy for deriving smoothing speed",
+    )
+    parser.add_argument(
+        "--yaw-smooth-scale",
+        type=float,
+        help="multiplier applied to smoothing speed for yaw adjustments",
+    )
+    parser.add_argument(
+        "--pitch-smooth-scale",
+        type=float,
+        help="multiplier applied to smoothing speed for pitch adjustments",
     )
     parser.add_argument(
         "--distance-smoothing-min",
@@ -1410,6 +1515,26 @@ def main(argv: list[str] | None = None) -> None:
         "--distance-smoothing-max",
         type=float,
         help="distance where the maximum smoothing speed applies",
+    )
+    parser.add_argument(
+        "--fov-smoothing-min",
+        type=float,
+        help="combined FOV angle where the minimum smoothing speed applies",
+    )
+    parser.add_argument(
+        "--fov-smoothing-max",
+        type=float,
+        help="combined FOV angle where the maximum smoothing speed applies",
+    )
+    parser.add_argument(
+        "--lock-ramp-duration",
+        type=float,
+        help="seconds smoothing speed takes to reach full strength after a lock",
+    )
+    parser.add_argument(
+        "--lock-ramp-start-speed",
+        type=float,
+        help="initial smoothing speed immediately after acquiring a target",
     )
     parser.add_argument(
         "--activation-key",
